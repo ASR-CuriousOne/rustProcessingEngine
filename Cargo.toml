@@ -1,0 +1,10 @@
+[package]
+name = "rust_processing_engine"
+version = "0.1.0"
+edition = "2024"
+
+default-run = "rust_processing_engine"
+
+[dependencies]
+csv = "1.4.0"
+serde = {version = "1.0.229", features = ["derive"]}
