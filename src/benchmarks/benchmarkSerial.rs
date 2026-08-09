@@ -1,7 +1,6 @@
-use rust_processing_engine::{Customer, process_csv};
+use rust_processing_engine::{BenchConfig, Customer, process_csv};
 use std::env;
 use std::fs;
-use std::path::Path;
 use std::process;
 use std::time::Instant;
 
@@ -9,20 +8,22 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        eprintln!("Usage: cargo run --release --bin benchmark -- <directory_path>");
+        eprintln!(
+            "Usage: cargo run --release --bin {} -- <directory_path>",
+            args[0]
+        );
         process::exit(1);
     }
 
-    let dir_path = Path::new(&args[1]);
-    if !dir_path.is_dir() {
-        eprintln!("Error: '{}' is not a valid directory.", dir_path.display());
-        process::exit(1);
-    }
+    let config = match BenchConfig::new(&args[1]) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("Configuration Error: {}", e);
+            process::exit(1);
+        }
+    };
 
-    println!(
-        "Starting CSV Benchmark on directory: {}\n",
-        dir_path.display()
-    );
+    println!("Starting benchmark on directory: {:?}", config.dir_path);
 
     let mut total_files = 0usize;
     let mut total_bytes = 0u64;
@@ -30,7 +31,7 @@ fn main() {
 
     let global_start_time = Instant::now();
 
-    let entries = match fs::read_dir(dir_path) {
+    let entries = match fs::read_dir(config.dir_path) {
         Ok(entries) => entries,
         Err(e) => {
             eprintln!("Failed to read directory: {}", e);

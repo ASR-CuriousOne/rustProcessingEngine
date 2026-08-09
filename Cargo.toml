@@ -6,8 +6,8 @@ edition = "2024"
 default-run = "rust_processing_engine"
 
 [[bin]]
-name = "benchmark"
-path = "src/benchmarks/benchmark.rs"
+name = "benchSerial"
+path = "src/benchmarks/benchmarkSerial.rs"
 
 [dependencies]
 csv = "1.4.0"
