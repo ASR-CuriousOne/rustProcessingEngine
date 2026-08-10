@@ -17,8 +17,12 @@ path = "src/benchmarks/benchmarkParallelCallback.rs"
 name = "benchParallelParsing"
 path = "src/benchmarks/benchmarkParallelParsing.rs"
 
+[[bin]]
+name = "benchMmap"
+path = "src/benchmarks/benchMmap.rs"
+
 [dependencies]
 csv = "1.4.0"
 serde = {version = "1.0.229", features = ["derive"]}
-
+memmap2 = "0.9"
 

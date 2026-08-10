@@ -5,8 +5,11 @@ pub use config::BenchConfig;
 pub use models::Customer;
 
 use csv::ByteRecord;
+use memmap2::MmapOptions;
 use std::error::Error;
+use std::fs::File;
 use std::io::Read;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 
@@ -195,4 +198,72 @@ where
     }
 
     Ok(())
+}
+
+fn find_next_newline(data: &[u8], start: usize) -> usize {
+    let mut pos = start;
+    while pos < data.len() && data[pos] != b'\n' {
+        pos += 1;
+    }
+    if pos < data.len() {
+        pos + 1
+    } else {
+        data.len()
+    }
+}
+
+pub fn process_csv_file_mmap(file_path: &str, num_threads: usize) -> Result<u64, Box<dyn Error>> {
+    let file = File::open(file_path)?;
+    let mmap = unsafe { MmapOptions::new().map(&file)? };
+    let data: &[u8] = &mmap;
+
+    let mut main_reader = csv::ReaderBuilder::new().from_reader(data);
+    let headers = main_reader.byte_headers()?.clone();
+
+    let data_start = find_next_newline(data, 0);
+
+    let mut boundaries = vec![data_start];
+    let file_size = data.len();
+    let chunk_size = (file_size - data_start) / num_threads;
+
+    for i in 1..num_threads {
+        let guess = data_start + (i * chunk_size);
+        let aligned = find_next_newline(data, guess);
+        boundaries.push(aligned);
+    }
+
+    boundaries.push(file_size);
+
+    let total_rows = AtomicU64::new(0);
+
+    thread::scope(|scope| {
+        for i in 0..num_threads {
+            let start = boundaries[i];
+            let end = boundaries[i + 1];
+
+            let chunk = &data[start..end];
+            let thread_headers = headers.clone();
+            let counter = &total_rows;
+
+            scope.spawn(move || {
+                let mut chunk_reader = csv::ReaderBuilder::new()
+                    .has_headers(false)
+                    .from_reader(chunk);
+
+                let mut local_count = 0;
+                let mut record = csv::ByteRecord::new();
+
+                while chunk_reader.read_byte_record(&mut record).unwrap_or(false) {
+                    if let Ok(_customer) = record.deserialize::<Customer>(Some(&thread_headers)) {
+                        local_count += 1;
+                    }
+                }
+
+                counter.fetch_add(local_count, Ordering::Relaxed);
+            });
+        }
+    });
+
+    Ok(total_rows.load(Ordering::Relaxed))
+
 }
