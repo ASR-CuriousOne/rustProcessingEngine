@@ -9,6 +9,14 @@ default-run = "rust_processing_engine"
 name = "benchSerial"
 path = "src/benchmarks/benchmarkSerial.rs"
 
+[[bin]]
+name = "benchParallelCallback"
+path = "src/benchmarks/benchmarkParallelCallback.rs"
+
+[[bin]]
+name = "benchParallelParsing"
+path = "src/benchmarks/benchmarkParallelParsing.rs"
+
 [dependencies]
 csv = "1.4.0"
 serde = {version = "1.0.229", features = ["derive"]}
