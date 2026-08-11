@@ -1,7 +1,9 @@
-use rust_processing_engine::{process_csv_file_mmap, BenchConfig};
+use rust_processing_engine::{BenchConfig, Customer, process_csv_file_mmap};
 use std::env;
 use std::fs;
 use std::process;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Instant;
 
@@ -24,9 +26,14 @@ fn main() {
         }
     };
 
-    let num_threads = thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    let num_threads = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
 
-    println!("Starting MMAP PARALLEL benchmark on directory: {:?}", config.dir_path);
+    println!(
+        "Starting MMAP PARALLEL benchmark on directory: {:?}",
+        config.dir_path
+    );
     println!("Threads: {}", num_threads);
 
     let mut total_files = 0usize;
@@ -58,7 +65,7 @@ fn main() {
             };
 
             let file_size = metadata.len();
-            
+
             let path_str = match path.to_str() {
                 Some(s) => s,
                 None => {
@@ -68,22 +75,25 @@ fn main() {
             };
 
             let file_start = Instant::now();
+            let total_file_rows = AtomicU64::new(0);
 
-            let result = process_csv_file_mmap(path_str, num_threads);
+            let result = process_csv_file_mmap(path_str, num_threads, |_customer: Customer| {
+                total_file_rows.fetch_add(1, Ordering::Relaxed);
+            });
 
             let file_elapsed = file_start.elapsed();
 
             match result {
-                Ok(final_file_rows) => {
+                Ok(()) => {
                     total_files += 1;
                     total_bytes += file_size;
-                    total_rows += final_file_rows;
+                    total_rows += total_file_rows.load(Ordering::Relaxed);
 
                     let file_mb = file_size as f64 / (1024.0 * 1024.0);
                     println!(
                         "  [OK] {:<25} | {:>8} rows | {:>6.2} MB | {:>8.2?} ",
                         path.file_name().unwrap_or_default().to_string_lossy(),
-                        final_file_rows,
+                        total_file_rows.load(Ordering::Relaxed),
                         file_mb,
                         file_elapsed
                     );

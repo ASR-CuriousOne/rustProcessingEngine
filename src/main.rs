@@ -1,6 +1,8 @@
-use rust_processing_engine::process_csv_file_mmap;
+use rust_processing_engine::{Customer, process_csv_file_mmap};
 use std::env;
 use std::process;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Instant;
 
@@ -24,18 +26,27 @@ fn main() {
     println!("---------------------------------------------------------");
 
     let start_time = Instant::now();
+    let total_rows = AtomicUsize::new(0);
 
-    match process_csv_file_mmap(file_path, num_threads) {
-        Ok(total_rows) => {
-            let elapsed = start_time.elapsed();
+    let result = process_csv_file_mmap(file_path, num_threads, |customer: Customer| {
+        total_rows.fetch_add(1, Ordering::Relaxed);
+        if customer.first_name == "Roy" {
+            println!(
+                "A {} lives in {}, {} and works at {}",
+                customer.first_name, customer.city, customer.country, customer.company
+            );
+        }
+    });
 
-            println!("Total Rows Processed: {}", total_rows);
-            println!("Total Time Taken:     {:.2?}", elapsed);
-        }
-        Err(e) => {
-            eprintln!("Error processing CSV: {}", e);
-            process::exit(1);
-        }
+    if let Err(e) = result {
+        eprintln!("Failed to parse CSV: {}", e);
+        process::exit(1);
     }
-}
 
+    let elapsed = start_time.elapsed();
+    println!(
+        "Total Rows Processed: {}",
+        total_rows.load(Ordering::Relaxed)
+    );
+    println!("Total Time Taken:     {:.2?}", elapsed);
+}

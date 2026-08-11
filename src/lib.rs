@@ -9,7 +9,6 @@ use memmap2::MmapOptions;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 
@@ -212,7 +211,14 @@ fn find_next_newline(data: &[u8], start: usize) -> usize {
     }
 }
 
-pub fn process_csv_file_mmap(file_path: &str, num_threads: usize) -> Result<u64, Box<dyn Error>> {
+pub fn process_csv_file_mmap<F>(
+    file_path: &str,
+    num_threads: usize,
+    on_record: F,
+) -> Result<(), Box<dyn Error>>
+where
+    F: Fn(Customer) + Sync,
+{
     let file = File::open(file_path)?;
     let mmap = unsafe { MmapOptions::new().map(&file)? };
     let data: &[u8] = &mmap;
@@ -234,8 +240,6 @@ pub fn process_csv_file_mmap(file_path: &str, num_threads: usize) -> Result<u64,
 
     boundaries.push(file_size);
 
-    let total_rows = AtomicU64::new(0);
-
     thread::scope(|scope| {
         for i in 0..num_threads {
             let start = boundaries[i];
@@ -243,27 +247,23 @@ pub fn process_csv_file_mmap(file_path: &str, num_threads: usize) -> Result<u64,
 
             let chunk = &data[start..end];
             let thread_headers = headers.clone();
-            let counter = &total_rows;
+            let callback = &on_record;
 
             scope.spawn(move || {
                 let mut chunk_reader = csv::ReaderBuilder::new()
                     .has_headers(false)
                     .from_reader(chunk);
 
-                let mut local_count = 0;
                 let mut record = csv::ByteRecord::new();
 
                 while chunk_reader.read_byte_record(&mut record).unwrap_or(false) {
-                    if let Ok(_customer) = record.deserialize::<Customer>(Some(&thread_headers)) {
-                        local_count += 1;
+                    if let Ok(customer) = record.deserialize::<Customer>(Some(&thread_headers)) {
+                        callback(customer);
                     }
                 }
-
-                counter.fetch_add(local_count, Ordering::Relaxed);
             });
         }
     });
 
-    Ok(total_rows.load(Ordering::Relaxed))
-
+    Ok(())
 }
