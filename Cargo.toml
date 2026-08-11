@@ -25,4 +25,8 @@ path = "src/benchmarks/benchMmap.rs"
 csv = "1.4.0"
 serde = {version = "1.0.229", features = ["derive"]}
 memmap2 = "0.9"
+memchr = "2.8.3"
+mimalloc = "0.1"
 
+[profile.release]
+debug = true

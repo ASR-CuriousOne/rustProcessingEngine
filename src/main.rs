@@ -1,4 +1,4 @@
-use rust_processing_engine::{Customer, process_csv_file_mmap};
+use rust_processing_engine::{CustomerRef, process_csv_file_mmap};
 use std::env;
 use std::fs;
 use std::process;
@@ -40,7 +40,7 @@ fn main() {
     let total_rows = AtomicUsize::new(0);
     let matching_rows = AtomicUsize::new(0);
 
-    let result = process_csv_file_mmap(file_path, num_threads, |customer: Customer| {
+    let result = process_csv_file_mmap(file_path, num_threads, |customer: CustomerRef| {
         total_rows.fetch_add(1, Ordering::Relaxed);
         if customer.first_name == "Roy" {
             matching_rows.fetch_add(1, Ordering::Relaxed);

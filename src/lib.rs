@@ -2,20 +2,25 @@ pub mod config;
 pub mod models;
 
 pub use config::BenchConfig;
-pub use models::Customer;
+pub use models::{Customer, CustomerRef};
 
 use csv::ByteRecord;
+use memchr::memchr;
 use memmap2::MmapOptions;
+use mimalloc::MiMalloc;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 
-pub fn process_csv<R, F>(reader: R, mut on_record: F) -> Result<(), Box<dyn Error>>
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+pub fn process_csv<R, F>(reader: R, on_record: F) -> Result<(), Box<dyn Error>>
 where
     R: Read,
-    F: FnMut(Customer),
+    F: Fn(Customer),
 {
     let mut rdr = csv::Reader::from_reader(reader);
 
@@ -200,15 +205,9 @@ where
 }
 
 fn find_next_newline(data: &[u8], start: usize) -> usize {
-    let mut pos = start;
-    while pos < data.len() && data[pos] != b'\n' {
-        pos += 1;
-    }
-    if pos < data.len() {
-        pos + 1
-    } else {
-        data.len()
-    }
+    memchr(b'\n', &data[start..])
+        .map(|p| start + p + 1)
+        .unwrap_or(data.len())
 }
 
 pub fn process_csv_file_mmap<F>(
@@ -217,14 +216,11 @@ pub fn process_csv_file_mmap<F>(
     on_record: F,
 ) -> Result<(), Box<dyn Error>>
 where
-    F: Fn(Customer) + Sync,
+    F: Fn(CustomerRef) + Sync,
 {
     let file = File::open(file_path)?;
     let mmap = unsafe { MmapOptions::new().map(&file)? };
     let data: &[u8] = &mmap;
-
-    let mut main_reader = csv::ReaderBuilder::new().from_reader(data);
-    let headers = main_reader.byte_headers()?.clone();
 
     let data_start = find_next_newline(data, 0);
 
@@ -246,7 +242,6 @@ where
             let end = boundaries[i + 1];
 
             let chunk = &data[start..end];
-            let thread_headers = headers.clone();
             let callback = &on_record;
 
             scope.spawn(move || {
@@ -257,7 +252,34 @@ where
                 let mut record = csv::ByteRecord::new();
 
                 while chunk_reader.read_byte_record(&mut record).unwrap_or(false) {
-                    if let Ok(customer) = record.deserialize::<Customer>(Some(&thread_headers)) {
+                    if record.len() < 12 {
+                        continue;
+                    }
+
+                    unsafe {
+                        let customer = CustomerRef {
+                            index: std::str::from_utf8_unchecked(&record[0])
+                                .parse()
+                                .unwrap_or(0),
+                            customer_id: std::str::from_utf8_unchecked(&record[1]),
+                            first_name: std::str::from_utf8_unchecked(&record[2]),
+                            last_name: std::str::from_utf8_unchecked(&record[3]),
+                            company: std::str::from_utf8_unchecked(&record[4]),
+                            city: std::str::from_utf8_unchecked(&record[5]),
+                            country: std::str::from_utf8_unchecked(&record[6]),
+                            phone_1: std::str::from_utf8_unchecked(&record[7]),
+
+                            phone_2: if record[8].is_empty() {
+                                None
+                            } else {
+                                Some(std::str::from_utf8_unchecked(&record[8]))
+                            },
+
+                            email: std::str::from_utf8_unchecked(&record[9]),
+                            subscription_date: std::str::from_utf8_unchecked(&record[10]),
+                            website: std::str::from_utf8_unchecked(&record[11]),
+                        };
+
                         callback(customer);
                     }
                 }

@@ -1,4 +1,4 @@
-use rust_processing_engine::{BenchConfig, Customer, process_csv_file_mmap};
+use rust_processing_engine::{BenchConfig, CustomerRef, process_csv_file_mmap};
 use std::env;
 use std::fs;
 use std::process;
@@ -77,7 +77,7 @@ fn main() {
             let file_start = Instant::now();
             let total_file_rows = AtomicU64::new(0);
 
-            let result = process_csv_file_mmap(path_str, num_threads, |_customer: Customer| {
+            let result = process_csv_file_mmap(path_str, num_threads, |_customer: CustomerRef| {
                 total_file_rows.fetch_add(1, Ordering::Relaxed);
             });
 
