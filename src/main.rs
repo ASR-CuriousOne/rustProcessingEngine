@@ -1,11 +1,12 @@
+use indicatif::{ProgressBar, ProgressStyle};
 use rust_processing_engine::{CustomerRef, process_csv_file_mmap};
 use std::env;
 use std::fs;
 use std::process;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -37,15 +38,53 @@ fn main() {
     println!("---------------------------------------------------------");
 
     let start_time = Instant::now();
-    let total_rows = AtomicUsize::new(0);
-    let matching_rows = AtomicUsize::new(0);
 
-    let result = process_csv_file_mmap(file_path, num_threads, |customer: CustomerRef| {
-        total_rows.fetch_add(1, Ordering::Relaxed);
-        if customer.first_name == "Roy" {
-            matching_rows.fetch_add(1, Ordering::Relaxed);
+    let total_rows = Arc::new(AtomicUsize::new(0));
+    let matching_rows = Arc::new(AtomicUsize::new(0));
+
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+            .template("{spinner:.green} [{elapsed_precise}] {msg}")
+            .unwrap(),
+    );
+    pb.set_message("Parsing CSV...");
+
+    pb.enable_steady_tick(Duration::from_millis(100));
+
+    let monitor_total = Arc::clone(&total_rows);
+    let monitor_pb = pb.clone();
+
+    thread::spawn(move || {
+        let monitor_start = Instant::now();
+        while !monitor_pb.is_finished() {
+            let current_rows = monitor_total.load(Ordering::Relaxed);
+            let elapsed = monitor_start.elapsed().as_secs_f64();
+
+            let rps = if elapsed > 0.0 {
+                (current_rows as f64 / elapsed) as u64
+            } else {
+                0
+            };
+
+            monitor_pb.set_message(format!("Parsed {} rows ({} rows/sec)", current_rows, rps));
+
+            thread::sleep(Duration::from_millis(100));
         }
     });
+
+    let parser_total = Arc::clone(&total_rows);
+    let parser_matching = Arc::clone(&matching_rows);
+
+    let result = process_csv_file_mmap(file_path, num_threads, |customer: CustomerRef| {
+        parser_total.fetch_add(1, Ordering::Relaxed);
+        if customer.first_name == "Roy" {
+            parser_matching.fetch_add(1, Ordering::Relaxed);
+        }
+    });
+
+    pb.finish_with_message("Parsing complete!");
 
     if let Err(e) = result {
         eprintln!("Failed to parse CSV: {}", e);
