@@ -1,4 +1,4 @@
-use rust_processing_engine::{BenchConfig, CustomerRef, process_csv_file_mmap};
+use rust_processing_engine::{BenchConfig, Customer, CustomerParser, process_csv};
 use std::env;
 use std::fs;
 use std::process;
@@ -9,7 +9,6 @@ use std::time::Instant;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-
     if args.len() < 2 {
         eprintln!(
             "Usage: cargo run --release --bin {} -- <directory_path>",
@@ -39,7 +38,6 @@ fn main() {
     let mut total_files = 0usize;
     let mut total_bytes = 0u64;
     let mut total_rows = 0u64;
-
     let global_start_time = Instant::now();
 
     let entries = match fs::read_dir(&config.dir_path) {
@@ -57,13 +55,11 @@ fn main() {
         };
 
         let path = entry.path();
-
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("csv") {
             let metadata = match fs::metadata(&path) {
                 Ok(m) => m,
                 Err(_) => continue,
             };
-
             let file_size = metadata.len();
 
             let path_str = match path.to_str() {
@@ -77,9 +73,10 @@ fn main() {
             let file_start = Instant::now();
             let total_file_rows = AtomicU64::new(0);
 
-            let result = process_csv_file_mmap(path_str, num_threads, |_customer: CustomerRef| {
-                total_file_rows.fetch_add(1, Ordering::Relaxed);
-            });
+            let result =
+                process_csv::<CustomerParser, _>(path_str, num_threads, |_customer: Customer| {
+                    total_file_rows.fetch_add(1, Ordering::Relaxed);
+                });
 
             let file_elapsed = file_start.elapsed();
 
@@ -111,8 +108,8 @@ fn main() {
 
     let global_elapsed = global_start_time.elapsed();
     let duration_secs = global_elapsed.as_secs_f64();
-    let total_mb = total_bytes as f64 / (1024.0 * 1024.0);
 
+    let total_mb = total_bytes as f64 / (1024.0 * 1024.0);
     let throughput_mb_s = if duration_secs > 0.0 {
         total_mb / duration_secs
     } else {
@@ -123,6 +120,7 @@ fn main() {
     } else {
         0.0
     };
+
     let avg_time_per_file = if total_files > 0 {
         (duration_secs * 1000.0) / total_files as f64
     } else {

@@ -6,18 +6,6 @@ edition = "2024"
 default-run = "rust_processing_engine"
 
 [[bin]]
-name = "benchSerial"
-path = "src/benchmarks/benchmarkSerial.rs"
-
-[[bin]]
-name = "benchParallelCallback"
-path = "src/benchmarks/benchmarkParallelCallback.rs"
-
-[[bin]]
-name = "benchParallelParsing"
-path = "src/benchmarks/benchmarkParallelParsing.rs"
-
-[[bin]]
 name = "benchMmap"
 path = "src/benchmarks/benchMmap.rs"
 

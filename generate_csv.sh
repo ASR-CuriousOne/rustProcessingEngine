@@ -1,7 +1,7 @@
 #!/bin/bash
 
 INPUT_FILE="testData/customers-2000000.csv"
-OUTPUT_FILE="testData/customers_massive.csv"
+OUTPUT_FILE="testData/customers-massive.csv"
 TARGET_SIZE_MB=4096 # Target size in megabytes (e.g., 1024 MB = 1 GB)
 
 # 1. Extract the header and write it to the output file
