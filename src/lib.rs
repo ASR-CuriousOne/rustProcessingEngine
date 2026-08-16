@@ -1,10 +1,12 @@
 pub mod config;
 pub mod models;
+pub mod monitor;
 
 pub use config::BenchConfig;
 #[cfg(not(feature = "fast-csv"))]
 pub use models::{Customer, CustomerParser};
 pub use models::{OhlcvData, OhlcvParser};
+pub use monitor::Monitor;
 
 use memchr::memchr;
 use memmap2::MmapOptions;
