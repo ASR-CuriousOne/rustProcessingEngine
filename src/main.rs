@@ -1,5 +1,5 @@
 use indicatif::{ProgressBar, ProgressStyle};
-use rust_processing_engine::{Customer, CustomerParser, process_csv};
+use rust_processing_engine::{OhlcvData, OhlcvParser, process_csv};
 use std::env;
 use std::fs;
 use std::process;
@@ -29,7 +29,7 @@ fn main() {
         .map(|n| n.get())
         .unwrap_or(4);
 
-    println!("Starting memory-mapped CSV parser...");
+    println!("Starting CSV parser...");
     println!("File: {}", file_path);
     println!("Threads: {}", num_threads);
     println!("---------------------------------------------------------");
@@ -70,15 +70,14 @@ fn main() {
     let parser_total = Arc::clone(&total_rows);
     let parser_matching = Arc::clone(&matching_rows);
 
-    let result =
-        process_csv::<CustomerParser, _>(file_path, num_threads, |customer: Customer| {
-            parser_total.fetch_add(1, Ordering::Relaxed);
-            if customer.first_name == "Roy" {
-                parser_matching.fetch_add(1, Ordering::Relaxed);
-            }
-        });
+    let result = process_csv::<OhlcvParser, _>(file_path, num_threads, |candle: OhlcvData| {
+        parser_total.fetch_add(1, Ordering::Relaxed);
+        if candle.volume > 1903851.0 {
+            parser_matching.fetch_add(1, Ordering::Relaxed);
+        }
+    });
 
-    pb.finish_with_message("Parsing complete!");
+    pb.finish_with_message("Parsing complete.");
 
     if let Err(e) = result {
         eprintln!("Failed to parse CSV: {}", e);
@@ -90,11 +89,11 @@ fn main() {
 
     println!(
         "Total Rows Processed: {}",
-        total_rows.load(Ordering::Relaxed)
+        parser_total.load(Ordering::Relaxed)
     );
     println!(
         "Total Matching Rows:  {}",
-        matching_rows.load(Ordering::Relaxed)
+        parser_matching.load(Ordering::Relaxed)
     );
     println!("Total Time Taken:     {:.2?}", elapsed);
     println!("Throughput:           {:.2} MB/s", throughput_mb_s);
