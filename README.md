@@ -4,9 +4,7 @@ Tried to maximize csv ingestion and parsing speed, finally ended up with the fol
 1. **Memory Mapping**:  File is memory-mapped (mmap) and partitioned into equal chunks, using memchr to align thread boundaries to newlines.
 2. **Zero Allocation Scanning**: Standard csv crate is bypassed in favor of a custom stack allocated byte scanner that uses memchr for SIMD comma splitting. Can switch to csv crate too if data consists of complex columns (e.g. commas inside quotes)
 3. **Fast Float Parsing**: Fast-float crate parses numbers directly from raw &[u8] slices.
-
-4. # Rust OHLCV Processing Engine
-
+4. 
 ### Performance Results
 
 Hardware: HP Omen 16 (16 Threads)
