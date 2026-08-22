@@ -80,6 +80,20 @@ pub struct OhlcvData {
     pub volume: f64,
 }
 
+impl OhlcvData {
+    pub fn typical_price(&self) -> f64 {
+        (self.high + self.low + self.close) / 3.0
+    }
+
+    pub fn spread(&self) -> f64 {
+        self.high - self.low
+    }
+
+    pub fn is_bullish(&self) -> bool {
+        self.close > self.open
+    }
+}
+
 pub struct OhlcvParser;
 
 impl ZeroCopyParse for OhlcvParser {
